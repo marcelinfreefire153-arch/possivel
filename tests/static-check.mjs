@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 
 const required = [
   'index.html',
@@ -46,7 +47,39 @@ const config = fs.readFileSync('supabase-config.js', 'utf8');
 if (/service_role|secret_key/i.test(config)) throw new Error('Segredo proibido no frontend.');
 if (!config.includes("aiFunctionName: 'possivel-ai'")) throw new Error('Possível IA não configurada no frontend.');
 if (!config.includes("proPriceLabel: 'R$ 15,99/mês'")) throw new Error('Preço do plano não está centralizado no frontend.');
-if (!config.includes("script.src = 'site-experience.js'")) throw new Error('Nova experiência do site não está carregada.');
+// Exercise the loader without fetching scripts or connecting to Supabase.
+// A version query is valid; a different file or remote origin is not.
+for (const readyState of ['loading', 'complete']) {
+  const appended = [];
+  let onReady;
+  const document = {
+    readyState,
+    createElement: (tag) => ({ tag, dataset: {} }),
+    querySelector: (selector) => appended.find((script) =>
+      (selector === 'script[data-possivel-experience]' && script.dataset.possivelExperience) ||
+      (selector === 'script[data-possivel-messages-filter]' && script.dataset.possivelMessagesFilter)),
+    head: { append: (script) => appended.push(script) },
+    addEventListener: (event, callback) => { if (event === 'DOMContentLoaded') onReady = callback; },
+  };
+  const context = vm.createContext({ window: {}, document });
+  vm.runInContext(config, context, { timeout: 1000 });
+  if (readyState === 'loading') {
+    if (appended.length || typeof onReady !== 'function') throw new Error('Loader não aguarda o DOM.');
+    onReady();
+  }
+  const scripts = appended.filter((script) => script.dataset.possivelExperience);
+  const base = 'https://example.invalid/possivel/';
+  const src = scripts.length === 1 ? new URL(scripts[0].src, base) : null;
+  if (!src || scripts[0].tag !== 'script' || src.origin !== new URL(base).origin ||
+      src.pathname !== '/possivel/site-experience.js' || src.username || src.password || src.hash) {
+    throw new Error('Nova experiência do site não está carregada por um script local válido.');
+  }
+  vm.runInContext(config, context, { timeout: 1000 });
+  if (readyState === 'loading') onReady();
+  if (appended.filter((script) => script.dataset.possivelExperience).length !== 1) {
+    throw new Error('Nova experiência do site foi carregada mais de uma vez.');
+  }
+}
 
 const experience = fs.readFileSync('site-experience.js', 'utf8');
 for (const marker of ['Buscar', 'Livros', 'Filmes e séries', 'R$ 15,99/mês', '2 GB']) {
