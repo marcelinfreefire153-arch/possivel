@@ -20,7 +20,16 @@ try {
   process.exit(1);
 }
 
-const vulnerabilities = report.vulnerabilities || {};
+if (audit.error || audit.signal || ![0, 1].includes(audit.status) || !report ||
+    report.error || typeof report.vulnerabilities !== 'object' || !report.vulnerabilities ||
+    Array.isArray(report.vulnerabilities) || !report.metadata?.vulnerabilities ||
+    !['critical', 'high', 'moderate', 'low'].every((key) =>
+      Number.isInteger(report.metadata.vulnerabilities[key]) && report.metadata.vulnerabilities[key] >= 0)) {
+  console.error('Auditoria indisponível ou resposta inválida do npm. Gate bloqueado; não há confirmação de segurança.');
+  process.exit(1);
+}
+
+const vulnerabilities = report.vulnerabilities;
 const advisoryFromUrl = (url = '') => String(url).match(/GHSA-[A-Za-z0-9-]+/)?.[0] || null;
 const advisories = [];
 

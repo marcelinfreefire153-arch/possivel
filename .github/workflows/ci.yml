@@ -19,6 +19,8 @@ jobs:
           node --check site-experience.js
       - name: Auditoria estática web/backend
         run: node tests/static-check.mjs
+      - name: Validar falhas do gate de auditoria
+        run: node --test tests/security-audit.test.mjs
 
   edge-functions:
     runs-on: ubuntu-latest
